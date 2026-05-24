@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slide Puzzle Custom</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #f4d7a1, #b8793e);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      color: #3b2414;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 1050px;
+      background: rgba(255, 248, 232, 0.95);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(60, 35, 10, 0.3);
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 28px;
+    }
+
+    .panel {
+      background: #fff4d8;
+      border: 2px solid #d2a15f;
+      border-radius: 18px;
+      padding: 18px;
+    }
+
+    .control {
+      margin-bottom: 14px;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    select,
+    input,
+    button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #b98542;
+      font-size: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: bold;
+      background: #8b4d1f;
+      color: white;
+      border: none;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: #6f3914;
+      transform: translateY(-1px);
+    }
+
+    .secondary {
+      background: #d99842;
+      margin-top: 8px;
+    }
+
+    .secondary:hover {
+      background: #b77727;
+    }
+
+    .game-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .stats {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      font-weight: bold;
+    }
+
+    .stat-box {
+      background: #ffe5ad;
+      border: 1px solid #d2a15f;
+      padding: 10px 14px;
+      border-radius: 12px;
+    }
+
+    canvas {
+      width: min(90vw, 560px);
+      height: min(90vw, 560px);
+      max-width: 560px;
+      max-height: 560px;
+      background: #c48a4a;
+      border: 10px solid #8b4d1f;
+      border-radius: 18px;
+      box-shadow: inset 0 0 16px rgba(0,0,0,0.25), 0 10px 25px rgba(0,0,0,0.25);
+      touch-action: none;
+    }
+
+    .hint {
+      font-size: 14px;
+      text-align: center;
+      color: #65401f;
+      line-height: 1.5;
+    }
+
+    .preview {
+      display: none;
+      width: 100%;
+      border-radius: 14px;
+      border: 2px solid #d2a15f;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 820px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="panel">
+      <h1>Slide Puzzle</h1>
+
+      <div class="control">
+        <label for="mode">Mode Puzzle</label>
+        <select id="mode">
+          <option value="number">Number Puzzle</option>
+          <option value="image">Image Puzzle</option>
+        </select>
+      </div>
+
+      <div class="control">
+        <label for="size">Ukuran Puzzle</label>
+        <select id="size">
+          <option value="3">3 × 3</option>
+          <option value="4" selected>4 × 4</option>
+          <option value="5">5 × 5</option>
+          <option value="6">6 × 6</option>
+        </select>
+      </div>
+
+      <div class="control">
+        <label for="customSize">Custom ukuran number</label>
+        <input id="customSize" type="number" min="2" max="10" placeholder="Contoh: 7 untuk 7×7" />
+      </div>
+
+      <div class="control image-options" style="display:none;">
+        <label for="defaultImage">Gambar Default</label>
+        <select id="defaultImage">
+          <option value="mountain">Gunung</option>
+          <option value="sky">Langit</option>
+          <option value="forest">Hutan</option>
+        </select>
+      </div>
+
+      <div class="control image-options" style="display:none;">
+        <label for="upload">Upload Gambar Sendiri</label>
+        <input id="upload" type="file" accept="image/*" />
+        <img id="preview" class="preview" alt="Preview gambar" />
+      </div>
+
+      <button id="newGame">Mulai / Acak Puzzle</button>
+      <button id="solve" class="secondary">Tampilkan Jawaban</button>
+
+      <p class="hint">
+        Klik angka/gambar dalam satu baris atau kolom dengan ruang kosong untuk menggeser beberapa kotak sekaligus. Bisa juga drag/slide ke arah ruang kosong.
+      </p>
+    </div>
+
+    <div class="game-area">
+      <div class="stats">
+        <div class="stat-box">Langkah: <span id="moves">0</span></div>
+        <div class="stat-box">Waktu: <span id="timer">00:00</span></div>
+        <div class="stat-box">Status: <span id="status">Siap</span></div>
+      </div>
+      <canvas id="puzzle" width="560" height="560"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('puzzle');
+    const ctx = canvas.getContext('2d');
+
+    const modeEl = document.getElementById('mode');
+    const sizeEl = document.getElementById('size');
+    const customSizeEl = document.getElementById('customSize');
+    const defaultImageEl = document.getElementById('defaultImage');
+    const uploadEl = document.getElementById('upload');
+    const previewEl = document.getElementById('preview');
+    const newGameBtn = document.getElementById('newGame');
+    const solveBtn = document.getElementById('solve');
+    const movesEl = document.getElementById('moves');
+    const timerEl = document.getElementById('timer');
+    const statusEl = document.getElementById('status');
+    const imageOptions = document.querySelectorAll('.image-options');
+
+    let size = 4;
+    let tiles = [];
+    let emptyIndex = 0;
+    let moves = 0;
+    let startTime = null;
+    let timerInterval = null;
+    let image = null;
+    let showAnswer = false;
+    let isAnimating = false;
+    let animation = null;
+    let pointerStart = null;
+    const ANIMATION_DURATION = 180;
+
+    const defaultImages = {
+      mountain: makeGradientImage(['#7dd3fc', '#fef3c7', '#78716c', '#166534']),
+      sky: makeGradientImage(['#38bdf8', '#bae6fd', '#fef9c3', '#fb923c']),
+      forest: makeGradientImage(['#bbf7d0', '#22c55e', '#166534', '#422006'])
+    };
+
+    function makeGradientImage(colors) {
+      const c = document.createElement('canvas');
+      c.width = 800;
+      c.height = 800;
+      const g = c.getContext('2d');
+      const gradient = g.createLinearGradient(0, 0, 800, 800);
+      colors.forEach((color, i) => gradient.addColorStop(i / (colors.length - 1), color));
+      g.fillStyle = gradient;
+      g.fillRect(0, 0, 800, 800);
+
+      g.globalAlpha = 0.25;
+      for (let i = 0; i < 18; i++) {
+        g.beginPath();
+        g.arc(Math.random() * 800, Math.random() * 800, 40 + Math.random() * 120, 0, Math.PI * 2);
+        g.fillStyle = 'white';
+        g.fill();
+      }
+      g.globalAlpha = 1;
+
+      const img = new Image();
+      img.src = c.toDataURL();
+      return img;
+    }
+
+    function getPuzzleSize() {
+      const custom = Number(customSizeEl.value);
+      if (custom >= 2 && custom <= 10) return custom;
+      return Number(sizeEl.value);
+    }
+
+    function initGame() {
+      size = getPuzzleSize();
+      const total = size * size;
+      tiles = Array.from({ length: total }, (_, i) => i + 1);
+      tiles[total - 1] = 0;
+      emptyIndex = total - 1;
+      moves = 0;
+      showAnswer = false;
+      movesEl.textContent = moves;
+      statusEl.textContent = 'Bermain';
+      resetTimer();
+      shuffleSolvable();
+      draw();
+    }
+
+    function shuffleSolvable() {
+      for (let i = 0; i < size * size * 80; i++) {
+        const neighbors = getMovableIndexes();
+        const randomIndex = neighbors[Math.floor(Math.random() * neighbors.length)];
+        swap(randomIndex, emptyIndex);
+        emptyIndex = randomIndex;
+      }
+    }
+
+    function getMovableIndexes() {
+      const row = Math.floor(emptyIndex / size);
+      const col = emptyIndex % size;
+      const result = [];
+      if (row > 0) result.push(emptyIndex - size);
+      if (row < size - 1) result.push(emptyIndex + size);
+      if (col > 0) result.push(emptyIndex - 1);
+      if (col < size - 1) result.push(emptyIndex + 1);
+      return result;
+    }
+
+    function swap(a, b) {
+      [tiles[a], tiles[b]] = [tiles[b], tiles[a]];
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const tileSize = canvas.width / size;
+
+      ctx.fillStyle = '#9a6530';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const movingIndexes = animation ? new Set(animation.movingIndexes) : new Set();
+
+      for (let i = 0; i < tiles.length; i++) {
+        if (movingIndexes.has(i)) continue;
+        drawTileAtIndex(i, 0, 0);
+      }
+
+      if (animation) {
+        for (const index of animation.movingIndexes) {
+          drawTileAtIndex(index, animation.offsetX, animation.offsetY);
+        }
+      }
+
+      if (showAnswer && modeEl.value === 'image' && image) {
+        ctx.save();
+        ctx.globalAlpha = 0.25;
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+    }
+
+    function drawTileAtIndex(index, offsetX, offsetY) {
+      const value = tiles[index];
+      const tileSize = canvas.width / size;
+      const row = Math.floor(index / size);
+      const col = index % size;
+      const x = col * tileSize + offsetX;
+      const y = row * tileSize + offsetY;
+
+      if (value === 0) {
+        drawEmpty(x, y, tileSize);
+        return;
+      }
+
+      if (modeEl.value === 'image') {
+        drawImageTile(value, x, y, tileSize);
+      } else {
+        drawNumberTile(value, x, y, tileSize);
+      }
+    }
+
+    function drawEmpty(x, y, tileSize) {
+      ctx.fillStyle = '#6b3f1c';
+      ctx.fillRect(x + 4, y + 4, tileSize - 8, tileSize - 8);
+    }
+
+    function drawNumberTile(value, x, y, tileSize) {
+      const padding = 5;
+      const gradient = ctx.createLinearGradient(x, y, x, y + tileSize);
+      gradient.addColorStop(0, '#fff5cf');
+      gradient.addColorStop(1, '#d49a4f');
+
+      ctx.fillStyle = gradient;
+      roundRect(x + padding, y + padding, tileSize - padding * 2, tileSize - padding * 2, 12);
+      ctx.fill();
+
+      ctx.strokeStyle = '#7c461d';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.fillStyle = '#3b2414';
+      ctx.font = `bold ${Math.max(18, tileSize * 0.38)}px Georgia, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(value, x + tileSize / 2, y + tileSize / 2);
+    }
+
+    function drawImageTile(value, x, y, tileSize) {
+      if (!image) image = defaultImages[defaultImageEl.value];
+      const correctIndex = value - 1;
+      const sourceRow = Math.floor(correctIndex / size);
+      const sourceCol = correctIndex % size;
+      const sx = sourceCol * (image.width / size);
+      const sy = sourceRow * (image.height / size);
+      const sw = image.width / size;
+      const sh = image.height / size;
+
+      ctx.drawImage(image, sx, sy, sw, sh, x + 4, y + 4, tileSize - 8, tileSize - 8);
+      ctx.strokeStyle = '#fff3';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 4, y + 4, tileSize - 8, tileSize - 8);
+
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(x + 8, y + 8, 34, 26);
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(value, x + 25, y + 21);
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function getIndexFromPointer(event) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (event.clientX - rect.left) * scaleX;
+      const y = (event.clientY - rect.top) * scaleY;
+      const tileSize = canvas.width / size;
+      const col = Math.floor(x / tileSize);
+      const row = Math.floor(y / tileSize);
+
+      if (row < 0 || row >= size || col < 0 || col >= size) return -1;
+      return row * size + col;
+    }
+
+    function getSlideMove(clickedIndex) {
+      if (clickedIndex < 0 || clickedIndex === emptyIndex) return null;
+
+      const clickedRow = Math.floor(clickedIndex / size);
+      const clickedCol = clickedIndex % size;
+      const emptyRow = Math.floor(emptyIndex / size);
+      const emptyCol = emptyIndex % size;
+
+      const movingIndexes = [];
+      let direction = null;
+
+      if (clickedRow === emptyRow) {
+        if (clickedCol < emptyCol) {
+          for (let col = emptyCol - 1; col >= clickedCol; col--) {
+            movingIndexes.push(clickedRow * size + col);
+          }
+          direction = { row: 0, col: 1 };
+        } else {
+          for (let col = emptyCol + 1; col <= clickedCol; col++) {
+            movingIndexes.push(clickedRow * size + col);
+          }
+          direction = { row: 0, col: -1 };
+        }
+      } else if (clickedCol === emptyCol) {
+        if (clickedRow < emptyRow) {
+          for (let row = emptyRow - 1; row >= clickedRow; row--) {
+            movingIndexes.push(row * size + clickedCol);
+          }
+          direction = { row: 1, col: 0 };
+        } else {
+          for (let row = emptyRow + 1; row <= clickedRow; row++) {
+            movingIndexes.push(row * size + clickedCol);
+          }
+          direction = { row: -1, col: 0 };
+        }
+      }
+
+      if (!direction || movingIndexes.length === 0) return null;
+      return { movingIndexes, direction, oldEmptyIndex: emptyIndex, newEmptyIndex: clickedIndex };
+    }
+
+    function performSlide(clickedIndex) {
+      if (isAnimating || statusEl.textContent === 'Selesai') return;
+
+      const move = getSlideMove(clickedIndex);
+      if (!move) return;
+
+      moves++;
+      movesEl.textContent = moves;
+      startTimerIfNeeded();
+      animateSlide(move);
+    }
+
+    function animateSlide(move) {
+      isAnimating = true;
+      const tileSize = canvas.width / size;
+      const startedAt = performance.now();
+
+      function frame(now) {
+        const progress = Math.min((now - startedAt) / ANIMATION_DURATION, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+
+        animation = {
+          movingIndexes: move.movingIndexes,
+          offsetX: move.direction.col * tileSize * eased,
+          offsetY: move.direction.row * tileSize * eased
+        };
+
+        draw();
+
+        if (progress < 1) {
+          requestAnimationFrame(frame);
+          return;
+        }
+
+        applySlideMove(move);
+        animation = null;
+        isAnimating = false;
+        draw();
+        checkWin();
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    function applySlideMove(move) {
+      const oldTiles = [...tiles];
+      tiles[move.oldEmptyIndex] = oldTiles[move.movingIndexes[0]];
+
+      for (let i = 1; i < move.movingIndexes.length; i++) {
+        tiles[move.movingIndexes[i - 1]] = oldTiles[move.movingIndexes[i]];
+      }
+
+      tiles[move.newEmptyIndex] = 0;
+      emptyIndex = move.newEmptyIndex;
+    }
+
+    function handleClick(event) {
+      performSlide(getIndexFromPointer(event));
+    }
+
+    function handlePointerDown(event) {
+      pointerStart = {
+        x: event.clientX,
+        y: event.clientY,
+        index: getIndexFromPointer(event)
+      };
+    }
+
+    function handlePointerUp(event) {
+      if (!pointerStart) return;
+
+      const dx = event.clientX - pointerStart.x;
+      const dy = event.clientY - pointerStart.y;
+      const distance = Math.hypot(dx, dy);
+      const clickedIndex = pointerStart.index;
+      pointerStart = null;
+
+      if (distance < 12) {
+        performSlide(clickedIndex);
+        return;
+      }
+
+      const move = getSlideMove(clickedIndex);
+      if (!move) return;
+
+      const isHorizontalSwipe = Math.abs(dx) > Math.abs(dy);
+      const swipeDirection = isHorizontalSwipe
+        ? { row: 0, col: dx > 0 ? 1 : -1 }
+        : { row: dy > 0 ? 1 : -1, col: 0 };
+
+      if (swipeDirection.row === move.direction.row && swipeDirection.col === move.direction.col) {
+        performSlide(clickedIndex);
+      }
+    }
+
+    function checkWin() {
+      const isWin = tiles.every((value, index) => {
+        if (index === tiles.length - 1) return value === 0;
+        return value === index + 1;
+      });
+
+      if (isWin) {
+        statusEl.textContent = 'Selesai';
+        clearInterval(timerInterval);
+        setTimeout(() => alert(`Selamat! Puzzle selesai dalam ${moves} langkah.`), 100);
+      }
+    }
+
+    function resetTimer() {
+      clearInterval(timerInterval);
+      startTime = null;
+      timerEl.textContent = '00:00';
+    }
+
+    function startTimerIfNeeded() {
+      if (startTime) return;
+      startTime = Date.now();
+      timerInterval = setInterval(() => {
+        const seconds = Math.floor((Date.now() - startTime) / 1000);
+        const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+        const ss = String(seconds % 60).padStart(2, '0');
+        timerEl.textContent = `${mm}:${ss}`;
+      }, 500);
+    }
+
+    modeEl.addEventListener('change', () => {
+      const isImage = modeEl.value === 'image';
+      imageOptions.forEach(el => el.style.display = isImage ? 'block' : 'none');
+      image = defaultImages[defaultImageEl.value];
+      initGame();
+    });
+
+    sizeEl.addEventListener('change', initGame);
+    customSizeEl.addEventListener('change', initGame);
+    defaultImageEl.addEventListener('change', () => {
+      image = defaultImages[defaultImageEl.value];
+      draw();
+    });
+
+    uploadEl.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          image = img;
+          previewEl.src = reader.result;
+          previewEl.style.display = 'block';
+          initGame();
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    newGameBtn.addEventListener('click', initGame);
+    solveBtn.addEventListener('click', () => {
+      tiles = Array.from({ length: size * size }, (_, i) => i + 1);
+      tiles[tiles.length - 1] = 0;
+      emptyIndex = tiles.length - 1;
+      showAnswer = true;
+      statusEl.textContent = 'Jawaban';
+      clearInterval(timerInterval);
+      draw();
+    });
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointerup', handlePointerUp);
+
+    image = defaultImages[defaultImageEl.value];
+    initGame();
+  </script>
+</body>
+</html>
